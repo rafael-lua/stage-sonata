@@ -1,0 +1,19 @@
+[bootstrap]
+main_collection = /main/main.collectionc
+
+[script]
+shared_state = 1
+
+[display]
+width = 1280
+height = 720
+fullscreen = 0
+high_dpi = 0
+
+[android]
+input_method = HiddenInputField
+
+[project]
+title = Stage Sonata
+developer = rafael-lua
+

@@ -1,0 +1,36 @@
+local GAME_STATE = require "modules.game_state"
+
+local windowW, windowH = window.get_size()
+
+function init(self)
+    local left_grid_id = factory.create("grid_spawner#grid_factory", nil, nil, {
+        parent = msg.url()
+    })
+
+    local right_grid_id = factory.create("grid_spawner#grid_factory", nil, nil, {
+        parent = msg.url()
+    })
+
+    GAME_STATE:setGridInstance(msg.url(nil, left_grid_id, nil), "left")
+    GAME_STATE:setGridInstance(msg.url(nil, right_grid_id, nil), "right")
+    GAME_STATE:registerListener(msg.url(), "playfield")
+end
+
+function update(self, dt)
+end
+
+local function getPosition(side, width, height)
+    if (side == "right") then
+        return vmath.vector3(windowW - width - 16, windowH - height - 16, 0)
+    else
+        return vmath.vector3(16, windowH - height - 16, 0)
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if (message_id == hash("state_synced")) then
+        local width = GAME_STATE.grid[message.side].width
+        local height = GAME_STATE.grid[message.side].height
+        GAME_STATE:setGridPosition(getPosition(message.side, width, height), message.side)
+    end
+end

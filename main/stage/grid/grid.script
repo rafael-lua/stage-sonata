@@ -1,0 +1,38 @@
+local should = require "modules.should"
+local game_grid = require "modules.game_grid"
+local GAME_STATE = require "modules.game_state"
+
+go.property("cell_size", 60)
+go.property("gap", 5)
+go.property("rows", 7)
+go.property("cols", 7)
+go.property("x_offset", 0)
+go.property("y_offset", 0)
+go.property("parent", msg.url())
+
+function init(self)
+    self.grid = game_grid.generate(self.cell_size, self.gap, self.rows, self.cols, 0, 0, self.x_offset, self.y_offset)
+
+    self.grid:generateCells()
+
+    go.set_parent(go.get_id(), self.parent)
+
+    self.grid:forEachCell(function(cell)
+        cell.instance = factory.create("#cell_spawner", cell.pos)
+        go.set_parent(cell.instance, go.get_id())
+    end)
+
+end
+
+function update(self, dt)
+end
+
+function on_message(self, message_id, message, sender)
+    if (message_id == hash("sync_state")) then
+        GAME_STATE.grid[message.side].width = self.grid.width
+        GAME_STATE.grid[message.side].height = self.grid.height
+        GAME_STATE:sendEvent("state_synced", {
+            side = message.side
+        })
+    end
+end
