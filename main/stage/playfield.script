@@ -19,7 +19,7 @@ end
 function update(self, dt)
 end
 
-local function getPosition(side, width, height)
+local getPosition = function(side, width, height)
     if (side == "right") then
         return vmath.vector3(windowW - width - 16, windowH - height - 16, 0)
     else

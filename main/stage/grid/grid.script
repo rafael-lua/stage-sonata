@@ -1,6 +1,6 @@
-local should = require "modules.should"
 local game_grid = require "modules.game_grid"
 local GAME_STATE = require "modules.game_state"
+local cell_controller = require "main.stage.grid.cell_controller"
 
 go.property("cell_size", 60)
 go.property("gap", 5)
@@ -11,6 +11,7 @@ go.property("y_offset", 0)
 go.property("parent", msg.url())
 
 function init(self)
+    msg.post(".", "acquire_input_focus")
     self.grid = game_grid.generate(self.cell_size, self.gap, self.rows, self.cols, 0, 0, self.x_offset, self.y_offset)
 
     self.grid:generateCells()
@@ -18,19 +19,31 @@ function init(self)
     go.set_parent(go.get_id(), self.parent)
 
     self.grid:forEachCell(function(cell)
-        cell.instance = factory.create("#cell_spawner", cell.pos)
+        cell.instance = factory.create("#cell_spawner", cell.props.pos)
         go.set_parent(cell.instance, go.get_id())
+        cell.props.animation = "basic"
+        label.set_text(msg.url(nil, cell.instance, "index"), cell.props.index_x .. "," .. cell.props.index_y)
     end)
-
 end
 
 function update(self, dt)
+end
+
+function on_input(self, action_id, action)
+    if action_id == hash("touch") then
+        pprint("pressed")
+    end
+
+    self.grid:forEachCell(function(cell)
+        cell_controller.updateTouch(cell, action)
+    end)
 end
 
 function on_message(self, message_id, message, sender)
     if (message_id == hash("sync_state")) then
         GAME_STATE.grid[message.side].width = self.grid.width
         GAME_STATE.grid[message.side].height = self.grid.height
+
         GAME_STATE:sendEvent("state_synced", {
             side = message.side
         })

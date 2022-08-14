@@ -65,7 +65,12 @@ function game_grid.generate(cellSize, gap, rows, cols, x, y, xOffset, yOffset)
 
             for grid_y = (self.rows - 1), 0, -1 do
                 self.cells[grid_x][grid_y] = {
-                    pos = self:getCellPosition(grid_x, grid_y)
+                    props = {
+                        pos = self:getCellPosition(grid_x, grid_y),
+                        index_x = grid_x,
+                        index_y = grid_y,
+                        size = self.cell_size
+                    }
                 }
             end
         end

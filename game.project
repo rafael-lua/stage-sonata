@@ -17,3 +17,9 @@ input_method = HiddenInputField
 title = Stage Sonata
 developer = rafael-lua
 
+[label]
+max_count = 128
+
+[collection]
+max_input_stack_entries = 16
+
