@@ -1,4 +1,5 @@
 local debugger = require "modules.debugger"
+local hashes = require "modules.hashes"
 
 function init(self)
     msg.post(".", "acquire_input_focus")
@@ -13,7 +14,7 @@ function update(self, dt)
 end
 
 function on_input(self, action_id, action)
-    if action_id == hash("toggle_debug") and action.released then
+    if action_id == hashes.debug.toggle_debug and action.released then
         self.toggle = not self.toggle
         msg.post("#debugger_gui", self.toggle and "enable" or "disable")
     end

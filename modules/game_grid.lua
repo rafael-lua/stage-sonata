@@ -1,5 +1,5 @@
 local should = require "modules.should"
-
+local cell_controller = require "main.stage.grid.cell_controller"
 local game_grid = {}
 
 function game_grid.generate(cellSize, gap, rows, cols, x, y, xOffset, yOffset)
@@ -69,7 +69,9 @@ function game_grid.generate(cellSize, gap, rows, cols, x, y, xOffset, yOffset)
                         pos = self:getCellPosition(grid_x, grid_y),
                         index_x = grid_x,
                         index_y = grid_y,
-                        size = self.cell_size
+                        size = self.cell_size,
+                        animation = "basic",
+                        block = cell_controller.getRandomBlock()
                     }
                 }
             end

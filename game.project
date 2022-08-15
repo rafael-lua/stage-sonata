@@ -23,3 +23,6 @@ max_count = 128
 [collection]
 max_input_stack_entries = 16
 
+[sprite]
+max_count = 256
+

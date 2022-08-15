@@ -1,4 +1,5 @@
 local GAME_STATE = require "modules.game_state"
+local hashes = require "modules.hashes"
 
 local windowW, windowH = window.get_size()
 
@@ -28,7 +29,7 @@ local getPosition = function(side, width, height)
 end
 
 function on_message(self, message_id, message, sender)
-    if (message_id == hash("state_synced")) then
+    if (message_id == hashes.game_state.state_synced) then
         local width = GAME_STATE.grid[message.side].width
         local height = GAME_STATE.grid[message.side].height
         GAME_STATE:setGridPosition(getPosition(message.side, width, height), message.side)

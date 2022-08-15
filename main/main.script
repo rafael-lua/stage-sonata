@@ -1,0 +1,5 @@
+math.randomseed(100000 * (socket.gettime() % 1))
+math.random()
+
+function init(self)
+end

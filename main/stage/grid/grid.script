@@ -1,6 +1,7 @@
 local game_grid = require "modules.game_grid"
 local GAME_STATE = require "modules.game_state"
 local cell_controller = require "main.stage.grid.cell_controller"
+local hashes = require "modules.hashes"
 
 go.property("cell_size", 60)
 go.property("gap", 5)
@@ -21,7 +22,7 @@ function init(self)
     self.grid:forEachCell(function(cell)
         cell.instance = factory.create("#cell_spawner", cell.props.pos)
         go.set_parent(cell.instance, go.get_id())
-        cell.props.animation = "basic"
+        cell_controller.setBlock(cell)
         label.set_text(msg.url(nil, cell.instance, "index"), cell.props.index_x .. "," .. cell.props.index_y)
     end)
 end
@@ -30,7 +31,7 @@ function update(self, dt)
 end
 
 function on_input(self, action_id, action)
-    if action_id == hash("touch") then
+    if action_id == hashes.input.touch then
         pprint("pressed")
     end
 
@@ -40,7 +41,7 @@ function on_input(self, action_id, action)
 end
 
 function on_message(self, message_id, message, sender)
-    if (message_id == hash("sync_state")) then
+    if (message_id == hashes.game_state.sync_state) then
         GAME_STATE.grid[message.side].width = self.grid.width
         GAME_STATE.grid[message.side].height = self.grid.height
 
