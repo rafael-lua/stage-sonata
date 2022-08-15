@@ -9,12 +9,12 @@ function cell_controller.updateTouch(cell, action)
 
     if isTouching and cell.animation ~= "basic_2" then
         cell.animation = "basic_2"
-        msg.post(msg.url(nil, cell.instance, "block"), "play_animation", {
+        msg.post(msg.url(nil, cell.instance, "cell_frame"), "play_animation", {
             id = hash("basic_2")
         })
     elseif not isTouching and cell.animation ~= "basic" then
         cell.animation = "basic"
-        msg.post(msg.url(nil, cell.instance, "block"), "play_animation", {
+        msg.post(msg.url(nil, cell.instance, "cell_frame"), "play_animation", {
             id = hash("basic")
         })
     end
