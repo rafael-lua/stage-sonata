@@ -1,8 +1,9 @@
 local should = require "modules.should"
-local cell_controller = require "main.stage.grid.cell_controller"
 local game_grid = {}
 
-function game_grid.generate(cellSize, gap, rows, cols, x, y, xOffset, yOffset)
+local cell_blocks = {"red", "blue", "green", "yellow"}
+
+function game_grid.generate(cellSize, gap, rows, cols, x, y)
     local newGrid = {
         cell_size = cellSize or 32,
         gap = gap or 0,
@@ -10,16 +11,18 @@ function game_grid.generate(cellSize, gap, rows, cols, x, y, xOffset, yOffset)
         cols = cols or 5,
         x = x or 0,
         y = y or 0,
-        x_offset = xOffset or 16,
-        y_offset = yOffset or 16,
         cells = {}
     }
 
     newGrid.cells_total = newGrid.rows * newGrid.cols
     newGrid.height = (newGrid.rows * newGrid.cell_size) + ((newGrid.rows - 1) * newGrid.gap)
     newGrid.width = (newGrid.cols * newGrid.cell_size) + ((newGrid.cols - 1) * newGrid.gap)
-    newGrid.x = newGrid.x + newGrid.x_offset
-    newGrid.y = newGrid.y + newGrid.y_offset
+
+    function newGrid:getRandomBlock()
+        local rand_index = math.ceil(math.random() * #cell_blocks)
+
+        return cell_blocks[rand_index]
+    end
 
     function newGrid:forEachCell(fn)
         should.be.fn(fn, "forEachCell:fn")
@@ -71,7 +74,7 @@ function game_grid.generate(cellSize, gap, rows, cols, x, y, xOffset, yOffset)
                         index_y = grid_y,
                         size = self.cell_size,
                         animation = "basic",
-                        block = cell_controller.getRandomBlock()
+                        block = self:getRandomBlock()
                     }
                 }
             end

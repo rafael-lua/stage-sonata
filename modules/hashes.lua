@@ -14,6 +14,8 @@ hashes.input = {
 }
 
 hashes.cell = {
+    set_block = hash("set_block"),
+    set_focus = hash("set_focus"),
     animation = {
         basic = hash("basic"),
         basic_2 = hash("basic_2"),

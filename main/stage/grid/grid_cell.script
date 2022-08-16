@@ -1,0 +1,37 @@
+local math = math
+local hashes = require "modules.hashes"
+
+local cell_blocks = {"red", "blue", "green", "yellow"}
+
+local getRandomBlock = function()
+    local rand_index = math.ceil(math.random() * #cell_blocks)
+
+    return cell_blocks[rand_index]
+end
+
+function init(self)
+    self.focused = false
+    local animation = go.get("#cell_frame", "animation")
+end
+
+function update(self, dt)
+    if self.focused and go.get("#cell_frame", "animation") ~= hashes.cell.animation.basic_2 then
+        msg.post("#cell_frame", "play_animation", {
+            id = hashes.cell.animation.basic_2
+        })
+    elseif not self.focused and go.get("#cell_frame", "animation") ~= hashes.cell.animation.basic then
+        msg.post("#cell_frame", "play_animation", {
+            id = hashes.cell.animation.basic
+        })
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if (message_id == hashes.cell.set_block) then
+        msg.post("#block", "play_animation", {
+            id = hashes.cell.animation[message.block]
+        })
+    elseif (message_id == hashes.cell.set_focus) then
+        self.focused = message.focus
+    end
+end

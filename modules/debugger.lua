@@ -14,27 +14,23 @@ local colors = {
     blue = vmath.vector4(0.15, 0.35, 1, 1)
 }
 
-function debugger:updateMouseState(x, y)
+function debugger.updateMouseState(x, y)
     mouse_state.x = x
     mouse_state.y = y
 end
 
 -- message can be either a string or a {text = "string", color = red|green|blue|white(default)}
-function debugger:setMessage(id, message)
-    if messages[id] == nil then
-        table.insert(messages, id, message)
-    else
-        messages[id] = message
-    end
+function debugger.setMessage(id, message)
+    messages[id] = message
 end
 
-function debugger:removeMessage(id, message)
-    table.remove(messages, id)
+function debugger.removeMessage(id)
+    messages[id] = nil
 end
 
 local textSpacing = 24
 
-function debugger:drawMessages()
+function debugger.drawMessages()
     local windowW, windowH = window.get_size()
     local textY = windowH - 32
     local textX = 32

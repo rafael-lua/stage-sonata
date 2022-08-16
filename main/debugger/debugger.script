@@ -9,7 +9,7 @@ end
 
 function update(self, dt)
     if (self.toggle) then
-        debugger:drawMessages()
+        debugger.drawMessages()
     end
 end
 
@@ -19,5 +19,5 @@ function on_input(self, action_id, action)
         msg.post("#debugger_gui", self.toggle and "enable" or "disable")
     end
 
-    debugger:updateMouseState(action.x, action.y)
+    debugger.updateMouseState(action.x, action.y)
 end
