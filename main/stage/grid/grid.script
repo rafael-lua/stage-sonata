@@ -2,6 +2,7 @@ local game_grid = require "modules.game_grid"
 local GAME_STATE = require "modules.game_state"
 local hashes = require "modules.hashes"
 local collider = require "modules.collider"
+local cell_controller = require "modules.cell_controller"
 
 go.property("cell_size", 60)
 go.property("gap", 5)
@@ -26,53 +27,25 @@ function init(self)
         label.set_text(msg.url(nil, cell.instance, "index"), cell.props.index_x .. "," .. cell.props.index_y)
     end)
 
-    self.cell_focus = {
-        current = nil,
-        previous = nil
-    }
+    self.cell_focus = nil
 end
 
 function update(self, dt)
 end
 
 function on_input(self, action_id, action)
-    if action_id == hashes.input.touch then
-        pprint("pressed")
-    end
-
     local grid_world_pos = go.get_world_position()
 
     if (collider.coordTouchsRectangle(action.x, action.y, grid_world_pos, self.grid.width, self.grid.height)) then
-        local action_offset_x_index = math.floor((action.x - grid_world_pos.x) / (self.grid.cell_size + self.grid.gap))
-        local action_offset_y_index = math.floor((action.y - grid_world_pos.y) / (self.grid.cell_size + self.grid.gap))
+        local x_index, y_index = self.grid:getFocusIndex(action, grid_world_pos)
 
-        if self.cell_focus.previous then
-            msg.post(self.grid.cells[self.cell_focus.previous.x][self.cell_focus.previous.y].instance, "set_focus", {
-                focus = false
-            })
+        if action_id == hashes.input.touch then
+            pprint("pressed")
         end
 
-        if self.cell_focus.current then
-            self.cell_focus.previous = {
-                x = self.cell_focus.current.x,
-                y = self.cell_focus.current.y
-            }
-        end
-
-        self.cell_focus.current = {
-            x = action_offset_x_index,
-            y = action_offset_y_index
-        }
-
-        msg.post(self.grid.cells[self.cell_focus.current.x][self.cell_focus.current.y].instance, "set_focus", {
-            focus = true
-        })
-    else
-        if self.cell_focus.previous then
-            msg.post(self.grid.cells[self.cell_focus.previous.x][self.cell_focus.previous.y].instance, "set_focus", {
-                focus = false
-            })
-        end
+        self.cell_focus = cell_controller.updateFocus(self.cell_focus, self.grid.cells, x_index, y_index)
+    elseif (self.cell_focus) then
+        self.cell_focus = cell_controller.resetFocus(self.cell_focus, self.grid.cells)
     end
 
     -- self.grid:forEachCell(function(cell)

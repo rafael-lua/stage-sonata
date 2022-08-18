@@ -24,6 +24,13 @@ function game_grid.generate(cellSize, gap, rows, cols, x, y)
         return cell_blocks[rand_index]
     end
 
+    function newGrid:getFocusIndex(action, grid_world_pos)
+        local action_offset_x_index = math.floor((action.x - grid_world_pos.x) / (self.cell_size + self.gap))
+        local action_offset_y_index = math.floor((action.y - grid_world_pos.y) / (self.cell_size + self.gap))
+
+        return action_offset_x_index, action_offset_y_index
+    end
+
     function newGrid:forEachCell(fn)
         should.be.fn(fn, "forEachCell:fn")
         assert(type(self.cells) == "table" and next(self.cells) ~= nil,
