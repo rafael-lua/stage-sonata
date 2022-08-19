@@ -34,7 +34,7 @@ function game_grid.generate(cellSize, gap, rows, cols, x, y)
     function newGrid:forEachCell(fn)
         should.be.fn(fn, "forEachCell:fn")
         assert(type(self.cells) == "table" and next(self.cells) ~= nil,
-            "grid:cells is empty, did you forgot to initialize ther cells?")
+            "grid:cells is empty, did you forgot to initialize the cells?")
 
         for col = 0, (self.cols - 1) do
             for row = (self.rows - 1), 0, -1 do
