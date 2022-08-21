@@ -52,6 +52,7 @@ function game_grid.generate(cellSize, gap, rows, cols, x, y)
         return gapX, gapY
     end
 
+    -- x and y index on grid for reference
     function newGrid:getCellPosition(x, y)
         should.be.all.number({x, y}, "getCellPosition")
         assert(x <= self.cols and y <= self.rows,

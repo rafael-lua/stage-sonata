@@ -1,45 +1,18 @@
+local GAME_STATE = require "modules.game_state"
 local hashes = require "modules.hashes"
 local movement_controller = {}
 
 --[[ 
-    NOTE: At this moment, the module will not work properly with diagonals 
+    NOTE: At this moment, the module will not work for diagonals
 ]]
 
-local checkBounds = function(direction, index_x, index_y, gridRows, gridCols)
-    local validBoundary = {
-        x = index_x,
-        y = index_y
-    }
-
-    if ((direction == "left") and (index_x - 1) >= 0) then
-        validBoundary.x = index_x - 1
-    elseif ((direction == "right") and (index_x + 1) < gridCols) then
-        validBoundary.x = index_x + 1
-    elseif ((direction == "bottom") and (index_y - 1) >= 0) then
-        validBoundary.y = index_y - 1
-    elseif ((direction == "up") and (index_y + 1) < gridRows) then
-        validBoundary.y = index_y + 1
-    else
-        validBoundary = nil
-    end
-
-    return validBoundary
-end
-
-local canMoveToDirection = function(direction, cell_focus, gridCells, gridRows, gridCols)
-    local validBoundary = checkBounds(direction, cell_focus.x, cell_focus.y, gridRows, gridCols)
-
-    if (validBoundary and (gridCells[validBoundary.x][validBoundary.y].props.block == nil)) then
-        return validBoundary
-    end
-
-    return false
-end
-
 function movement_controller.moveToEmpty(target_cell_to_move, empty_cell)
+    GAME_STATE:pushToPlayerProp("is_moving")
+
     msg.post(
         empty_cell.instance, "place_block", {
-            block = target_cell_to_move.props.block
+            block = target_cell_to_move.props.block,
+            from_position = target_cell_to_move.props.pos
         }
     ) -- move the target block to the available empty space
     empty_cell.props.block = target_cell_to_move.props.block
@@ -48,9 +21,18 @@ function movement_controller.moveToEmpty(target_cell_to_move, empty_cell)
     target_cell_to_move.props.block = nil
 end
 
-function movement_controller.makeSpace(current_empty_cell, cell_focus, selected_block, grid)
+function movement_controller.isDiagonal(origin_reference, focus)
+    return (origin_reference.x ~= focus.x and origin_reference.y ~= focus.y)
+end
+
+function movement_controller.makeSpace(current_empty_cell,
+    cell_focus,
+    selected_block,
+    grid,
+    ignore_diagonal)
+    local should_ignore_diagonal = ignore_diagonal == nil and true or ignore_diagonal
     -- we ignore diagonals using the grabbed cell position reference
-    if (selected_block.x ~= cell_focus.x and selected_block.y ~= cell_focus.y) then
+    if (should_ignore_diagonal and movement_controller.isDiagonal(selected_block, cell_focus)) then
         return current_empty_cell
     end
 
@@ -133,123 +115,7 @@ function movement_controller.makeSpace(current_empty_cell, cell_focus, selected_
 end
 
 function movement_controller.resetSpace(current_empty_cell, selected_block, grid)
-    local new_empty_cell = {
-        x = selected_block.x,
-        y = selected_block.y
-    }
-
-    local stepX, stepY = 0, 0
-    if current_empty_cell.x > selected_block.x then
-        stepX = -1
-    elseif current_empty_cell.x < selected_block.x then
-        stepX = 1
-    end
-
-    if current_empty_cell.y > selected_block.y then
-        stepY = -1
-    elseif current_empty_cell.y < selected_block.y then
-        stepY = 1
-    end
-
-    if stepX ~= 0 then
-        local needle = current_empty_cell.x
-        while (needle ~= selected_block.x) do
-            local empty_cell = grid.cells[needle][current_empty_cell.y]
-            local target_cell = grid.cells[needle + stepX][current_empty_cell.y]
-
-            movement_controller.moveToEmpty(target_cell, empty_cell)
-
-            needle = needle + stepX
-        end
-    elseif stepY ~= 0 then
-        local needle = current_empty_cell.y
-        while (needle ~= selected_block.y) do
-            local empty_cell = grid.cells[current_empty_cell.x][needle]
-            local target_cell = grid.cells[current_empty_cell.x][needle + stepY]
-
-            movement_controller.moveToEmpty(target_cell, empty_cell)
-
-            needle = needle + stepY
-        end
-    end
-
-    return new_empty_cell
-end
-
-function movement_controller.updateMovement(lastValidMovementIndex, selected_block, cell_focus, grid)
-    local gridCells = grid.cells
-
-    if selected_block.x ~= cell_focus.x and selected_block.y ~= cell_focus.y then
-        return lastValidMovementIndex
-    end
-
-    -- check if there is a valid space to move
-    local leftSpace = canMoveToDirection("left", cell_focus, grid.cells, grid.rows, grid.cols)
-    local rightSpace = canMoveToDirection("right", cell_focus, grid.cells, grid.rows, grid.cols)
-    local downSpace = canMoveToDirection("bottom", cell_focus, grid.cells, grid.rows, grid.cols)
-    local upSpace = canMoveToDirection("up", cell_focus, grid.cells, grid.rows, grid.cols)
-
-    local emptyCell
-    if leftSpace then
-        emptyCell = grid.cells[leftSpace.x][leftSpace.y]
-    elseif rightSpace then
-        emptyCell = grid.cells[rightSpace.x][rightSpace.y]
-    elseif downSpace then
-        emptyCell = grid.cells[downSpace.x][downSpace.y]
-    elseif upSpace then
-        emptyCell = grid.cells[upSpace.x][upSpace.y]
-    end
-
-    if emptyCell then
-        local cellToMove = grid.cells[cell_focus.x][cell_focus.y]
-        movement_controller.moveToEmpty(cellToMove, emptyCell)
-        lastValidMovementIndex = {
-            x = cell_focus.x,
-            y = cell_focus.y
-        }
-    end
-
-    return lastValidMovementIndex
-end
-
--- if the move is not valid, reset the grid blocks
-function movement_controller.killMovement(lastValidMovementIndex, selected_block, grid)
-    local stepX, stepY = 0, 0
-    if lastValidMovementIndex.x > selected_block.x then
-        stepX = 1
-    elseif lastValidMovementIndex.x < selected_block.x then
-        stepX = -1
-    end
-
-    if lastValidMovementIndex.y > selected_block.y then
-        stepY = 1
-    elseif lastValidMovementIndex.y < selected_block.y then
-        stepY = -1
-    end
-
-    if stepX ~= 0 then
-        local needle = lastValidMovementIndex.x
-        while (needle ~= selected_block.x) do
-            local empty_cell = grid.cells[needle][lastValidMovementIndex.y]
-            local target_cell = grid.cells[needle - stepX][lastValidMovementIndex.y]
-
-            movement_controller.moveToEmpty(target_cell, empty_cell)
-
-            needle = needle - stepX
-        end
-    end
-
-    if stepY ~= 0 then
-        local needle = lastValidMovementIndex.y
-        while (needle ~= selected_block.y) do
-            local empty_cell = grid.cells[lastValidMovementIndex.x][needle]
-            local target_cell = grid.cells[lastValidMovementIndex.x][needle - stepY]
-
-            movement_controller.moveToEmpty(target_cell, empty_cell)
-
-            needle = needle - stepY
-        end
-    end
+    movement_controller.makeSpace(current_empty_cell, selected_block, selected_block, grid, false)
 
     return nil
 end

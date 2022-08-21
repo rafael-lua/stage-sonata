@@ -1,38 +1,70 @@
-local math = math
+local GAME_STATE = require "modules.game_state"
 local hashes = require "modules.hashes"
 
 local cell_blocks = {"red", "blue", "green", "yellow"}
 
+go.property("block", msg.url())
+
 function init(self)
     self.focused = false
+    self.is_animating = false
 
     local animation = go.get("#cell_frame", "animation")
 end
 
 function update(self, dt)
     if self.focused and go.get("#cell_frame", "animation") ~= hashes.cell.animation.basic_2 then
-        msg.post("#cell_frame", "play_animation", {
-            id = hashes.cell.animation.basic_2
-        })
+        msg.post(
+            "#cell_frame", "play_animation", {
+                id = hashes.cell.animation.basic_2
+            }
+        )
     elseif not self.focused and go.get("#cell_frame", "animation") ~= hashes.cell.animation.basic then
-        msg.post("#cell_frame", "play_animation", {
-            id = hashes.cell.animation.basic
-        })
+        msg.post(
+            "#cell_frame", "play_animation", {
+                id = hashes.cell.animation.basic
+            }
+        )
     end
 end
 
 function on_message(self, message_id, message, sender)
     if (message_id == hashes.cell.set_block) then
-        msg.post("#block", "play_animation", {
-            id = hashes.cell.animation[message.block]
-        })
-    elseif (message_id == hashes.cell.select_block) then
-        msg.post("#block", "disable")
+        msg.post(
+            self.block, "play_animation", {
+                id = hashes.cell.animation[message.block]
+            }
+        )
+    elseif (message_id == hashes.cell.disable_block) then
+        msg.post(self.block, "disable")
     elseif (message_id == hashes.cell.place_block) then
-        msg.post("#block", "play_animation", {
-            id = hashes.cell.animation[message.block]
-        })
-        msg.post("#block", "enable")
+        msg.post(
+            self.block, "play_animation", {
+                id = hashes.cell.animation[message.block]
+            }
+        )
+        msg.post(self.block, "enable")
+
+        if message.from_position then
+            go.cancel_animations(self.block, "position")
+
+            if self.is_animating then
+                GAME_STATE:removeFromPlayerProp("is_moving")
+                self.is_animating = false
+            end
+
+            go.set_position(go.get_position(), self.block)
+            self.is_animating = true
+            go.animate(
+                self.block, "position", go.PLAYBACK_ONCE_BACKWARD, message.from_position, go.EASING_OUTBACK, 0.15, 0,
+                    function()
+                        GAME_STATE:removeFromPlayerProp("is_moving")
+                        self.is_animating = false
+                    end
+            )
+        else
+            GAME_STATE:removeFromPlayerProp("is_moving")
+        end
     elseif (message_id == hashes.cell.set_focus) then
         self.focused = message.focus
     end

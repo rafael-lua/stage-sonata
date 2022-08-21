@@ -4,13 +4,22 @@ local hashes = require "modules.hashes"
 local windowW, windowH = window.get_size()
 
 function init(self)
-    local left_grid_id = factory.create("grid_spawner#grid_factory", nil, nil, {
-        parent = msg.url()
-    })
+    local player_id = hash("player#abc123")
 
-    local right_grid_id = factory.create("grid_spawner#grid_factory", nil, nil, {
-        parent = msg.url()
-    })
+    GAME_STATE:setPlayer(player_id)
+
+    local left_grid_id = factory.create(
+        "grid_spawner#grid_factory", nil, nil, {
+            parent = msg.url(),
+            player = player_id
+        }
+    )
+
+    local right_grid_id = factory.create(
+        "grid_spawner#grid_factory", nil, nil, {
+            parent = msg.url()
+        }
+    )
 
     GAME_STATE:setGridInstance(msg.url(nil, left_grid_id, nil), "left")
     GAME_STATE:setGridInstance(msg.url(nil, right_grid_id, nil), "right")

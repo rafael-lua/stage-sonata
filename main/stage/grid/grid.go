@@ -14,9 +14,9 @@ components {
   }
 }
 embedded_components {
-  id: "cell_spawner"
+  id: "block_selected"
   type: "factory"
-  data: "prototype: \"/main/stage/grid/grid_cell.go\"\n"
+  data: "prototype: \"/main/stage/grid/selected_block.go\"\n"
   "load_dynamically: false\n"
   ""
   position {
@@ -32,9 +32,9 @@ embedded_components {
   }
 }
 embedded_components {
-  id: "block_selected"
-  type: "factory"
-  data: "prototype: \"\"\n"
+  id: "cell_spawner"
+  type: "collectionfactory"
+  data: "prototype: \"/main/stage/grid/grid_cell/grid_cell.collection\"\n"
   "load_dynamically: false\n"
   ""
   position {
