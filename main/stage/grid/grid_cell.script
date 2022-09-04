@@ -1,8 +1,7 @@
 local GAME_STATE = require "modules.game_state"
 local hashes = require "modules.hashes"
 
-local cell_blocks = {"red", "blue", "green", "yellow"}
-
+go.property("player", hash(""))
 go.property("block", msg.url())
 
 function init(self)
@@ -38,6 +37,9 @@ function on_message(self, message_id, message, sender)
     elseif (message_id == hashes.cell.disable_block) then
         msg.post(self.block, "disable")
     elseif (message_id == hashes.cell.place_block) then
+        -- We will start a new animation for every placement.
+        GAME_STATE:pushToPlayerProp(self.player, "is_moving")
+
         msg.post(
             self.block, "play_animation", {
                 id = hashes.cell.animation[message.block]
@@ -46,24 +48,25 @@ function on_message(self, message_id, message, sender)
         msg.post(self.block, "enable")
 
         if message.from_position then
+            -- We want to first reset any ongoing block animations.
             go.cancel_animations(self.block, "position")
 
             if self.is_animating then
-                GAME_STATE:removeFromPlayerProp("is_moving")
-                self.is_animating = false
+                GAME_STATE:removeFromPlayerProp(self.player, "is_moving")
             end
-
             go.set_position(go.get_position(), self.block)
+
+            -- Define a new animation for the just placed block.
             self.is_animating = true
             go.animate(
                 self.block, "position", go.PLAYBACK_ONCE_BACKWARD, message.from_position, go.EASING_OUTBACK, 0.15, 0,
                     function()
-                        GAME_STATE:removeFromPlayerProp("is_moving")
+                        GAME_STATE:removeFromPlayerProp(self.player, "is_moving")
                         self.is_animating = false
                     end
             )
         else
-            GAME_STATE:removeFromPlayerProp("is_moving")
+            GAME_STATE:removeFromPlayerProp(self.player, "is_moving")
         end
     elseif (message_id == hashes.cell.set_focus) then
         self.focused = message.focus

@@ -8,39 +8,14 @@ function init(self)
 
     GAME_STATE:setPlayer(player_id)
 
-    local left_grid_id = factory.create(
+    -- Initialize the grid for the specified player.
+    factory.create(
         "grid_spawner#grid_factory", nil, nil, {
             parent = msg.url(),
             player = player_id
         }
     )
 
-    local right_grid_id = factory.create(
-        "grid_spawner#grid_factory", nil, nil, {
-            parent = msg.url()
-        }
-    )
-
-    GAME_STATE:setGridInstance(msg.url(nil, left_grid_id, nil), "left")
-    GAME_STATE:setGridInstance(msg.url(nil, right_grid_id, nil), "right")
-    GAME_STATE:registerListener(msg.url(), "playfield")
-end
-
-function update(self, dt)
-end
-
-local getPosition = function(side, width, height)
-    if (side == "right") then
-        return vmath.vector3(windowW - width - 16, windowH - height - 16, 0)
-    else
-        return vmath.vector3(16, windowH - height - 16, 0)
-    end
-end
-
-function on_message(self, message_id, message, sender)
-    if (message_id == hashes.game_state.state_synced) then
-        local width = GAME_STATE.grid[message.side].width
-        local height = GAME_STATE.grid[message.side].height
-        GAME_STATE:setGridPosition(getPosition(message.side, width, height), message.side)
-    end
+    local gridHeight = GAME_STATE:getPlayer(player_id).grid.height
+    GAME_STATE:setGridPosition(vmath.vector3(16, windowH - gridHeight - 16, 0), player_id)
 end

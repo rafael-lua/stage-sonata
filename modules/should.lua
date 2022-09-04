@@ -25,8 +25,10 @@ function should.be.number(value, propertyName)
 end
 
 function should.be.all.number(values, propertyName)
-    assert(type(values) == "table",
-        "'should.be.all.number' must be called with a flat table/array of values to be asserted")
+    assert(
+        type(values) == "table",
+            "'should.be.all.number' must be called with a flat table/array of values to be asserted"
+    )
     propertyName = propertyName or "property"
     local assertMessage = "'" .. propertyName .. "' should be called with a numbers"
 
@@ -45,6 +47,22 @@ function should.be.table(value, propertyName)
     local assertMessage = "'" .. propertyName .. "' should be called with a table"
 
     assert(type(value) == "table", assertMessage)
+end
+
+function should.be.cellCoordinate(value, propertyName)
+    propertyName = propertyName or "property"
+    local assertMessage = "'" .. propertyName .. "' should be a object with a row and a col index."
+
+    assert(value.row ~= nil and value.col ~= nil, assertMessage)
+end
+
+function should.be.block(value, propertyName)
+    should.be.cellCoordinate(value, propertyName)
+
+    propertyName = propertyName or "property"
+    local assertMessage = "'" .. propertyName .. "' should have a block property."
+
+    assert(value.block ~= nil, assertMessage)
 end
 
 return should

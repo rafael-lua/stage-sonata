@@ -1,9 +1,7 @@
 local GAME_STATE = require "modules.game_state"
 local game_grid = require "modules.game_grid"
 local hashes = require "modules.hashes"
-local collider = require "modules.collider"
-local cell_controller = require "modules.cell_controller"
-local movement_controller = require "modules.movement_controller"
+local helpers = require "modules.helpers"
 
 go.property("player", hash(""))
 go.property("parent", msg.url())
@@ -16,28 +14,23 @@ function init(self)
     if self.player ~= hash("") then
         msg.post(".", "acquire_input_focus")
     end
-    self.grid = game_grid.generate(self.cell_size, self.gap, self.rows, self.cols, 0, 0)
 
-    self.grid:generateCells()
+    GAME_STATE:setGridInstance(
+        self.player, game_grid.new(
+            {
+                cell_size = self.cell_size,
+                gap = self.gap,
+                rows = self.rows,
+                cols = self.cols,
+                x = 0,
+                y = 0,
+                player_id = self.player
+            }
+        )
+    )
+    GAME_STATE:getPlayer(self.player).grid.generateCells("#cell_spawner")
 
     go.set_parent(go.get_id(), self.parent)
-
-    self.grid:forEachCell(
-        function(cell)
-            cell.collection = collectionfactory.create("#cell_spawner", cell.props.pos)
-            cell.instance = cell.collection[hash("/grid_cell")]
-            cell.block_instance = cell.collection[hash("/block")]
-            go.set(msg.url(nil, cell.instance, "logic"), "block", msg.url(nil, cell.block_instance, nil))
-            go.set_parent(cell.instance, go.get_id())
-            go.set_parent(cell.block_instance, go.get_id())
-            msg.post(
-                cell.instance, "set_block", {
-                    block = cell.props.block
-                }
-            )
-            label.set_text(msg.url(nil, cell.instance, "index"), cell.props.index_x .. "," .. cell.props.index_y)
-        end
-    )
 
     self.grabbing = false
     self.cell_focus = nil
@@ -45,13 +38,11 @@ function init(self)
     self.current_empty_cell = nil
 end
 
-function update(self, dt)
-end
-
 function on_input(self, action_id, action)
     if self.player ~= hash("") then
         local grid_world_pos = go.get_world_position()
 
+        -- Set the grab state variables.
         if action_id == hashes.input.touch then
             if action.pressed then
                 self.grabbing = true
@@ -60,70 +51,37 @@ function on_input(self, action_id, action)
             end
         end
 
-        -- click released anywhere in the screen, we place any block selected to the grid
-        -- the order matter, since there is a chance of releasing the input during a focus,
-        -- and then a new focus is set on the same frame, causing issues in the placement
-        if (not self.grabbing and self.selected_block) then
-            if (self.cell_focus and not movement_controller.isDiagonal(self.selected_block, self.cell_focus)) then
-                self.selected_block = cell_controller.placeBlock(self.grid.cells, self.cell_focus, self.selected_block)
-                self.current_empty_cell = nil
-            end
+        local player = GAME_STATE:getPlayer(self.player)
+        local grid = player.grid
 
-            if (self.current_empty_cell and self.selected_block) then
-                self.current_empty_cell = movement_controller.resetSpace(
-                    self.current_empty_cell, self.selected_block, self.grid
-                )
-                self.selected_block = cell_controller.placeBlock(
-                    self.grid.cells, self.selected_block, self.selected_block
-                )
-            end
+        -- Click released anywhere in the screen, we place any selected block on the grid.
+        -- The order matter, since there is a chance of releasing the input during a focus state
+        -- and then a new focus is set on the same frame, causing issues in the placement.
+        if (not self.grabbing) then
+            grid.placeSelectedBlock()
         end
 
-        if (collider.coordTouchsRectangle(action.x, action.y, grid_world_pos, self.grid.width, self.grid.height)) then
-            -- pointer is inside grid
-            local x_index, y_index = self.grid:getFocusIndex(action, grid_world_pos)
+        local col_index, row_index, isWithinGrid = grid.getFocusIndex(action, grid_world_pos)
+        grid.updateFocus(col_index, row_index, isWithinGrid)
 
-            self.cell_focus = cell_controller.updateFocus(self.cell_focus, self.grid.cells, x_index, y_index)
-            local focus_has_block = self.grid.cells[self.cell_focus.x][self.cell_focus.y].props.block
+        -- Update selected block position to the cursor.
+        local selectedBlock = grid.state.selected
+        if selectedBlock then
+            go.set_position(vmath.vector3(action.x, action.y, 0), selectedBlock.instance)
+        end
 
-            if (self.grabbing and self.selected_block == nil and focus_has_block) then
-                if #GAME_STATE:getPlayer().is_moving == 0 then
-                    self.selected_block = cell_controller.selectBlock(self.grid.cells, action, x_index, y_index)
-                    self.current_empty_cell = {
-                        x = self.selected_block.x,
-                        y = self.selected_block.y
-                    }
-                    movement_controller.makeSpace(
-                        self.current_empty_cell, self.cell_focus, self.selected_block, self.grid
-                    )
-                end
-            elseif (self.grabbing and self.selected_block) then
-                self.current_empty_cell = movement_controller.makeSpace(
-                    self.current_empty_cell, self.cell_focus, self.selected_block, self.grid
-                )
+        if isWithinGrid then
+            local cellFocus = grid.state.focus
+            local focus_has_block = grid.cells[cellFocus.col][cellFocus.row].props.block
+
+            if (self.grabbing and focus_has_block and (not selectedBlock) and #player.is_moving == 0) then
+                -- If player started to grab, the focus has a block, there is no current selected blocks 
+                -- and also there is no current block movements: We select a new block.
+                grid.selectBlock(action, "#block_selected")
+            elseif (self.grabbing and selectedBlock) then
+                -- Since the player already grabbed a block, we just update movement. 
+                grid.makeSpace()
             end
-
-        elseif (self.cell_focus) then
-            -- pointer is out of grid, so we reset the current active focus
-            self.cell_focus = cell_controller.resetFocus(self.cell_focus, self.grid.cells)
         end
-
-        -- update selecte block position to keep it on the cursor
-        if self.selected_block then
-            go.set_position(vmath.vector3(action.x, action.y, 0), self.selected_block.instance)
-        end
-    end
-end
-
-function on_message(self, message_id, message, sender)
-    if (message_id == hashes.game_state.sync_state) then
-        GAME_STATE.grid[message.side].width = self.grid.width
-        GAME_STATE.grid[message.side].height = self.grid.height
-
-        GAME_STATE:sendEvent(
-            "state_synced", {
-                side = message.side
-            }
-        )
     end
 end
