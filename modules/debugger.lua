@@ -19,7 +19,7 @@ function debugger.updateMouseState(x, y)
     mouse_state.y = y
 end
 
--- message can be either a string or a {text = "string", color = red|green|blue|white(default)}
+-- Message can be either a string or a {text = "string", color = red|green|blue|white(default)}.
 function debugger.setMessage(id, message)
     messages[id] = message
 end
@@ -49,11 +49,13 @@ function debugger.drawMessages()
                 textColor = colors[v.color] or colors.white
             end
 
-            msg.post("@render:", "draw_debug_text", {
-                text = text,
-                position = vmath.vector3(textX, textY - offsetY, 1),
-                color = textColor
-            })
+            msg.post(
+                "@render:", "draw_debug_text", {
+                    text = text,
+                    position = vmath.vector3(textX, textY - offsetY, 1),
+                    color = textColor
+                }
+            )
             offsetY = offsetY + textSpacing
         else
             pprint("DEBUGGER: MAX PRINT MESSAGES REACHED, EXTRA MESSAGES WILL BE HIDDEN.")
@@ -61,11 +63,13 @@ function debugger.drawMessages()
         end
     end
 
-    msg.post("@render:", "draw_debug_text", {
-        text = "Mouse (x,y): " .. math.floor(mouse_state.x) .. ", " .. math.floor(mouse_state.y),
-        position = vmath.vector3(32, 32 + math.floor(textSpacing / 2), 0),
-        color = colors.white
-    })
+    msg.post(
+        "@render:", "draw_debug_text", {
+            text = "Mouse (x,y): " .. math.floor(mouse_state.x) .. ", " .. math.floor(mouse_state.y),
+            position = vmath.vector3(32, 32 + math.floor(textSpacing / 2), 0),
+            color = colors.white
+        }
+    )
 end
 
 return debugger

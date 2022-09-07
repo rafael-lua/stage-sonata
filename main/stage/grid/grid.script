@@ -33,9 +33,6 @@ function init(self)
     go.set_parent(go.get_id(), self.parent)
 
     self.grabbing = false
-    self.cell_focus = nil
-    self.selected_block = nil
-    self.current_empty_cell = nil
 end
 
 function on_input(self, action_id, action)
@@ -60,8 +57,9 @@ function on_input(self, action_id, action)
         -- Click released anywhere in the screen, we place any selected block on the grid.
         -- The order matter, since there is a chance of releasing the input during a focus state
         -- and then a new focus is set on the same frame, causing issues in the placement.
-        if (not self.grabbing) then
+        if (not self.grabbing and grid.state.selected) then
             grid.placeSelectedBlock()
+            grid.checkMatches()
         end
 
         local col_index, row_index, isWithinGrid = grid.getFocusIndex(action, grid_world_pos)

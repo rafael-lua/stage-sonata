@@ -8,27 +8,36 @@ function init(self)
     self.focused = false
     self.highlighted = false
     self.is_animating = false
+    self.matched = false
 
     local animation = go.get("#cell_frame", "animation")
 end
 
 function update(self, dt)
-    local non_focused_animation = self.highlighted and hashes.cell.animation.basic_h or hashes.cell.animation.basic
+    if self.matched then
+        msg.post(
+            "#cell_frame", "play_animation", {
+                id = hashes.cell.animation.basic_match
+            }
+        )
+    else
+        local non_focused_animation = self.highlighted and hashes.cell.animation.basic_h or hashes.cell.animation.basic
 
-    if self.focused and go.get("#cell_frame", "animation") ~= hashes.cell.animation.basic_2 then
-        -- Change to the focused animation if cell is focused.
-        msg.post(
-            "#cell_frame", "play_animation", {
-                id = hashes.cell.animation.basic_2
-            }
-        )
-    elseif not self.focused and go.get("#cell_frame", "animation") ~= non_focused_animation then
-        -- Change to the base animation (neutral or highlighted) if not focused.
-        msg.post(
-            "#cell_frame", "play_animation", {
-                id = non_focused_animation
-            }
-        )
+        if self.focused and go.get("#cell_frame", "animation") ~= hashes.cell.animation.basic_2 then
+            -- Change to the focused animation if cell is focused.
+            msg.post(
+                "#cell_frame", "play_animation", {
+                    id = hashes.cell.animation.basic_2
+                }
+            )
+        elseif not self.focused and go.get("#cell_frame", "animation") ~= non_focused_animation then
+            -- Change to the base animation (neutral or highlighted) if not focused.
+            msg.post(
+                "#cell_frame", "play_animation", {
+                    id = non_focused_animation
+                }
+            )
+        end
     end
 end
 
@@ -77,5 +86,7 @@ function on_message(self, message_id, message, sender)
         self.focused = message.focus
     elseif (message_id == hashes.cell.set_highlight) then
         self.highlighted = message.highlight
+    elseif (message_id == hashes.cell.set_match) then
+        self.matched = message.matched
     end
 end

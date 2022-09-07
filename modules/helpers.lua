@@ -20,7 +20,7 @@ function helpers.deepmerge(base, item)
     end
 
     for k, v in pairs(item) do
-        local typeBase = type(item[k])
+        local typeBase = type(base[k])
         local typeItem = type(item[k])
         local isTable = typeBase == "table" and typeItem == "table"
         if typeBase == typeItem then
@@ -29,6 +29,17 @@ function helpers.deepmerge(base, item)
     end
 
     return base
+end
+
+function helpers.count(table)
+    should.be.table(table, "table")
+
+    local count = 0
+    for _, __ in pairs(table) do
+        count = count + 1
+    end
+
+    return count
 end
 
 function helpers.coordTouchsRectangle(x, y, pos, width, height)
