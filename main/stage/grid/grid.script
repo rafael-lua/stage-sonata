@@ -54,6 +54,9 @@ function on_input(self, action_id, action)
         local player = GAME_STATE:getPlayer(self.player)
         local grid = player.grid
 
+        -- Update the axis highlight when block is grabbed.
+        grid.highlightAxis(self.grabbing)
+
         -- Click released anywhere in the screen, we place any selected block on the grid.
         -- The order matter, since there is a chance of releasing the input during a focus state
         -- and then a new focus is set on the same frame, causing issues in the placement.

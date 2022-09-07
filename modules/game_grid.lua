@@ -18,7 +18,8 @@ local defaultGrid = {
     state = {
         focus = nil, -- Mouse hovering - {row, col}.
         selected = nil, -- Block grabbed - {row, col, block, instance}.
-        empty = nil -- Current empty cell during block grab state - {row, col}.
+        empty = nil, -- Current empty cell during block grab state - {row, col}.
+        highlighted_axis = nil -- Row and col to highlight on grabbed state - {row, col}.
     },
     player_id = hash("")
 }
@@ -167,8 +168,8 @@ function game_grid.new(gridConfig)
 
         -- We only update focus if we need to.
         if grid_props.state.focus ~= nil then
-            local focus_state_col = grid_props.state.focus.x
-            local focus_state_row = grid_props.state.focus.y
+            local focus_state_col = grid_props.state.focus.col
+            local focus_state_row = grid_props.state.focus.row
 
             if focusCol == focus_state_col and focusRow == focus_state_row then
                 return
@@ -271,11 +272,11 @@ function game_grid.new(gridConfig)
 
     -- Based on the current empty cell and current cell focus, 
     -- move blocks in the correct order to open space.
-    function grid_props.makeSpace(ignore_diagonal)
+    function grid_props.makeSpace(ignore_diagonal, custom_focus)
         local emptyCell = grid_props.state.empty
 
         if (emptyCell) then
-            local cellFocus = grid_props.state.focus
+            local cellFocus = custom_focus ~= nil and custom_focus or grid_props.state.focus
             local selectedBlock = grid_props.state.selected
 
             local should_ignore_diagonal = ignore_diagonal == nil and true or ignore_diagonal
@@ -360,11 +361,11 @@ function game_grid.new(gridConfig)
     -- Make the current selected block the empty cell
     -- by forcing it as the current focus.
     function grid_props.resetSpace()
-        grid_props.state.focus = {
+        local customFocus = {
             col = grid_props.state.selected.col,
             row = grid_props.state.selected.row
         }
-        grid_props.makeSpace(false)
+        grid_props.makeSpace(false, customFocus)
     end
 
     -- Place the current selected block to the grid.
@@ -394,7 +395,37 @@ function game_grid.new(gridConfig)
             -- We clear the current selected block, as well as deleting its instance.
             go.delete(selectedBlock.instance)
             grid_props.state.selected = nil
+        end
+    end
 
+    -- Set highlight for the selected cell row and col axis.
+    function grid_props.setAxisHighlight(highlight)
+        local row_axis = grid_props.state.selected.row
+        local col_axis = grid_props.state.selected.col
+        local cells = grid_props.cells
+
+        for col = 0, grid_props.cols - 1, 1 do
+            msg.post(
+                cells[col][row_axis].instance, "set_highlight", {
+                    highlight = highlight
+                }
+            )
+        end
+
+        for row = 0, grid_props.rows - 1, 1 do
+            msg.post(
+                cells[col_axis][row].instance, "set_highlight", {
+                    highlight = highlight
+                }
+            )
+        end
+    end
+
+    function grid_props.highlightAxis(grabbed)
+        if (grabbed and grid_props.state.selected) then
+            grid_props.setAxisHighlight(true)
+        elseif (grid_props.state.selected) then
+            grid_props.setAxisHighlight(false)
         end
     end
 
