@@ -23,7 +23,8 @@ local defaultGrid = {
         highlighted_axis = nil -- Row and col to highlight on grabbed state - {row, col}.
     },
     player_id = hash(""),
-    match_factor = 3 -- The minimum amount necessary for a valid match.
+    match_factor = 3, -- The minimum amount necessary for a valid match.
+    matchless_retries = 1000
 }
 
 function game_grid.new(gridConfig)
@@ -36,9 +37,82 @@ function game_grid.new(gridConfig)
 
     -- Gets a random valid block.
     function grid_props.getRandomBlock()
-        local rand_index = math.ceil(math.random() * #cell_blocks)
+        local rand_index = math.floor(math.random() * #cell_blocks) + 1
 
         return cell_blocks[rand_index]
+    end
+
+    -- Get a block that will not match, for generating matchless tables.
+    -- Block is nil if all blocks match.
+    function grid_props.getNextBlock(col, row)
+        -- Create a copy of valid blocks
+        local block_list = {}
+
+        for _, cellBlock in pairs(cell_blocks) do
+            table.insert(
+                block_list, {
+                    value = cellBlock,
+                    sort_factor = math.random()
+                }
+            )
+        end
+
+        -- Sort it randomly
+        table.sort(
+            block_list, function(a, b)
+                return a.sort_factor > b.sort_factor
+            end
+        )
+
+        -- Pop until a valid block is found or throws if none is valid.
+        local random_block = table.remove(block_list)
+
+        -- Keep trying new blocks until one without a match is found.
+        while grid_props.block_matches_behind(col, row, random_block.value) do
+            if #block_list > 0 then
+                random_block = table.remove(block_list)
+            else
+                random_block.value = nil
+                break
+            end
+        end
+
+        return random_block.value
+    end
+
+    -- Simple match check that only takes in consideration previous blocks and stops at 3.
+    function grid_props.block_matches_behind(col, row, block)
+        local matched = false
+
+        if col >= 2  then
+            local col_match_count = 0
+
+            for col_index = col - 1, col - (grid_props.match_factor - 1), -1 do
+                if (grid_props.cells[col_index][row].props.block == block) then
+                    col_match_count = col_match_count + 1
+                end
+            end
+
+            if col_match_count >= (grid_props.match_factor - 1) then
+                matched = true
+            end
+        end
+
+        if row >= 2 then
+            local row_match_count = 0
+
+            for row_index = row - 1, row - (grid_props.match_factor - 1), -1 do
+                if (grid_props.cells[col][row_index].props.block == block) then
+                    row_match_count = row_match_count + 1
+                end
+            end
+
+            if row_match_count >= (grid_props.match_factor - 1) then
+                matched = true
+            end
+        end
+
+        return matched
     end
 
     -- Convert mouse position to grid coordinates (x and y indexes). Also,
@@ -68,7 +142,9 @@ function game_grid.new(gridConfig)
 
         for col = 0, (grid_props.cols - 1) do
             for row = 0, (grid_props.rows - 1), 1 do
-                fn(grid_props.cells[col][row])
+                if grid_props.cells[col] then
+                    fn(grid_props.cells[col][row])
+                end
             end
         end
     end
@@ -103,24 +179,56 @@ function game_grid.new(gridConfig)
     end
 
     -- Function to spawn the cells on the grid. Needs an valid cell factory url.
+    -- It counts blocks and make sure the grid initialize without matches.
     function grid_props.generateCells(factoryUrl)
-        grid_props.cells = {} -- Essentially resets the grid.
+        local retries = grid_props.matchless_retries
+        local generated = false
 
-        for grid_col = 0, (grid_props.cols - 1) do
-            grid_props.cells[grid_col] = {}
+        while (not generated and retries > 0) do
+            grid_props.cells = {}
+            local valid_grid = true
 
-            for grid_row = 0, (grid_props.rows - 1), 1 do
-                local props = {
-                    pos = grid_props.getCellWorldPosition(grid_col, grid_row),
-                    index_col = grid_col,
-                    index_row = grid_row,
-                    size = grid_props.cell_size,
-                    animation = "basic",
-                    block = grid_props.getRandomBlock(),
-                    cluster = nil -- Used to check clusters overlap on matches.
-                }
+            for grid_col = 0, (grid_props.cols - 1) do
+                grid_props.cells[grid_col] = {}
 
-                local cell_collection = collectionfactory.create(factoryUrl, props.pos)
+                for grid_row = 0, (grid_props.rows - 1), 1 do
+                    local props = {
+                        pos = grid_props.getCellWorldPosition(grid_col, grid_row),
+                        index_col = grid_col,
+                        index_row = grid_row,
+                        size = grid_props.cell_size,
+                        animation = "basic",
+                        block = grid_props.getNextBlock(grid_col, grid_row),
+                        cluster = nil -- Used to check clusters overlap on matches.
+                    }
+
+                    if props.block == nil then
+                        valid_grid = false
+                        break
+                    end
+
+                    grid_props.cells[grid_col][grid_row] = {
+                        props = props
+                    }
+                end
+
+                if not valid_grid then
+                    break
+                end
+            end
+
+            retries = retries - 1
+            generated = valid_grid
+        end
+
+        assert(
+            retries > 0,
+                "Retries limit reached for generating matchless grid. Make sure there is enough block variants."
+        )
+
+        grid_props.forEachCell(
+            function(cell)
+                local cell_collection = collectionfactory.create(factoryUrl, cell.props.pos)
                 local cell_instance = cell_collection[hash("/grid_cell")]
                 local cell_block_instance = cell_collection[hash("/block")]
 
@@ -130,19 +238,16 @@ function game_grid.new(gridConfig)
                 go.set_parent(cell_block_instance, go.get_id())
                 msg.post(
                     cell_instance, "set_block", {
-                        block = props.block
+                        block = cell.props.block
                     }
                 )
-                label.set_text(msg.url(nil, cell_instance, "index"), props.index_col .. "," .. props.index_row)
+                label.set_text(msg.url(nil, cell_instance, "index"), cell.props.index_col .. "," .. cell.props.index_row)
 
-                grid_props.cells[grid_col][grid_row] = {
-                    props = props,
-                    collection = cell_collection,
-                    instance = cell_instance,
-                    block_instance = cell_block_instance
-                }
+                cell.collection = cell_collection
+                cell.instance = cell_instance
+                cell.block_instance = cell_block_instance
             end
-        end
+        )
     end
 
     -- Clear the current focus state if focus is set.
