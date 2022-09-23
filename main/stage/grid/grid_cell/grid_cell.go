@@ -22,8 +22,8 @@ embedded_components {
   "blend_mode: BLEND_MODE_ALPHA\n"
   ""
   position {
-    x: 32.0
-    y: 32.0
+    x: 0.0
+    y: 0.0
     z: 0.0
   }
   rotation {
@@ -76,8 +76,8 @@ embedded_components {
   "material: \"/builtins/fonts/label.material\"\n"
   ""
   position {
-    x: 32.0
-    y: 32.0
+    x: 0.0
+    y: 0.0
     z: 0.1
   }
   rotation {

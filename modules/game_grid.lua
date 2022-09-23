@@ -17,14 +17,54 @@ local defaultGrid = {
     y = 0,
     cells = {},
     state = {
+        -- Stages: idle (player can move), matching (clearing grid matches if any)
+        stage = "idle",
+        matches = nil, -- Array of matching clusters.
         focus = nil, -- Mouse hovering - {row, col}.
         selected = nil, -- Block grabbed - {row, col, block, instance}.
         empty = nil, -- Current empty cell during block grab state - {row, col}.
-        highlighted_axis = nil -- Row and col to highlight on grabbed state - {row, col}.
+        highlighted_axis = nil, -- Row and col to highlight on grabbed state - {row, col}.
+        praises = {
+            final_combo_multiplier = 0,
+            total = 0
+        }
     },
     player_id = hash(""),
     match_factor = 3, -- The minimum amount necessary for a valid match.
-    matchless_retries = 1000
+    matchless_retries = 1000, -- Try limit for generating matchless grid.
+
+    match_config = {
+        base_unit = 50, -- Value per block matched.
+
+        -- Every successful match (different clusters) in one single movement will add one 
+        -- to the combo multiplier. The combo multiplier is applied last to the final 
+        -- praise combo value. 
+        combo_multiplier = 1,
+
+        -- The enemy anxiety is passively added to the final [combo multiplier]. Its the
+        -- amount of enemy anxiety points times the [anxiety multiplier].
+        anxiety_multiplier = 0.1,
+
+        --[[ 
+            If there is multiple different clusters matched together in the same grid,
+            we will multiply the [base unit] by the amount of extra clusters. Formula:
+                empoweredBaseUnit = [base unit] * ([clusters amount] * [clusters multiplier])
+            So if [base unit] is 50 and [clusters multiplier] is 1, and there is 3 clusters, 
+            [base unit] will be:
+                empoweredBaseUnit = 50 * (3 * 1) = 150
+        ]]
+        clusters_multiplier = 1,
+
+        --[[
+            The [base unit (empowered)] value will grow exponentially given the size of the cluster.
+            The fomula is:
+                factorValue = [cluster size] - [match_factor]
+                finalUnitValue = [base unit (empowered)] * (factor_multipler ^ factorValue)
+            If cluster has exact size of [match_factor], the multipler is 1 since the 
+            factorValue will be 0.
+        ]]
+        factor_multipler = 2
+    }
 }
 
 function game_grid.new(gridConfig)
@@ -84,7 +124,7 @@ function game_grid.new(gridConfig)
     function grid_props.block_matches_behind(col, row, block)
         local matched = false
 
-        if col >= 2  then
+        if col >= 2 then
             local col_match_count = 0
 
             for col_index = col - 1, col - (grid_props.match_factor - 1), -1 do
@@ -170,12 +210,14 @@ function game_grid.new(gridConfig)
         )
         assert(col >= 0 and row >= 0, "'getCellWorldPosition' col or row parameter was smaller than 0")
 
+        local cellSizeOffset = grid_props.cell_size / 2
+
         local gapX, gapY = grid_props.getGaps(col, row)
 
         local cell_x = col * (grid_props.cell_size + gapX)
         local cell_y = row * (grid_props.cell_size + gapY)
 
-        return vmath.vector3((cell_x + grid_props.x), (cell_y + grid_props.y), 0)
+        return vmath.vector3((cell_x + grid_props.x) + cellSizeOffset, (cell_y + grid_props.y) + cellSizeOffset, 0)
     end
 
     -- Function to spawn the cells on the grid. Needs an valid cell factory url.
@@ -338,7 +380,7 @@ function game_grid.new(gridConfig)
     end
 
     -- Move the target cell to the current empty space.
-    function grid_props.moveToEmpty(target_cell_to_move)
+    function grid_props.moveToCurrentEmpty(target_cell_to_move)
         local currentEmptyCell = grid_props.state.empty
         local emptyCell = grid_props.cells[currentEmptyCell.col][currentEmptyCell.row]
 
@@ -429,7 +471,7 @@ function game_grid.new(gridConfig)
                     while (needle ~= cellFocus.col) do
                         local target_cell = grid_props.cells[needle + stepCol][emptyCell.row]
 
-                        grid_props.moveToEmpty(target_cell)
+                        grid_props.moveToCurrentEmpty(target_cell)
 
                         emptyCell.col = target_cell.props.index_col
                         needle = needle + stepCol
@@ -443,7 +485,7 @@ function game_grid.new(gridConfig)
                     while (needle ~= cellFocus.row) do
                         local target_cell = grid_props.cells[emptyCell.col][needle + stepRow]
 
-                        grid_props.moveToEmpty(target_cell)
+                        grid_props.moveToCurrentEmpty(target_cell)
 
                         emptyCell.row = target_cell.props.index_row
                         needle = needle + stepRow
@@ -538,12 +580,72 @@ function game_grid.new(gridConfig)
         end
     end
 
+    -- Calculates and apply the damage value based on combo.
+    -- Ends the turn.
+    function grid_props.applyPraise(total_combo_points)
+        --[[
+            The final praise points calculation will be as follows:
+                praiseBoost = math.floor(math.log10([total combo points]))
+                praisePoints = ([total combo points] / ([match factor] * [base unit]))
+                boostedPraise = praisePoints * praiseBoost
+        ]]
+
+        grid_props.state.stage = "idle"
+    end
+
+    -- Given an array of clusters, we clear the board and apply the matches logic.
+    -- Return true if matched any.
+    -- Cluster object: { count, block, matched }
+    function grid_props.clearMatches()
+        local matches = grid_props.state.matches
+        local matched = false
+
+        if matches then
+            local cells = grid_props.cells
+            local praises = grid_props.state.praises
+            local match_config = grid_props.match_config
+            matched = true
+
+            -- If combo multiplier is zero, we initialize the combo count
+            if praises.final_combo_multiplier == 0 then
+                -- TODO: Add the enemy anxiety
+                local enemy_anxiety = 0
+                local extra_combo = match_config.anxiety_multiplier * enemy_anxiety
+                praises.final_combo_multiplier = match_config.combo_multiplier + extra_combo
+            end
+
+            -- Animate and collect.
+            for _, cluster in pairs(matches) do
+                for _, cell in pairs(cluster.matched) do
+                    msg.post(
+                        cells[cell.col][cell.row].instance, "set_match", {
+                            matched = true
+                        }
+                    )
+                    cells[cell.col][cell.row].props.cluster = nil
+                    cells[cell.col][cell.row].props.block = nil
+                end
+
+                --[[ Praise calculation per cluster ]]
+
+                -- Add 1 top combo count per per cluster
+                praises.final_combo_multiplier = praises.final_combo_multiplier + 1
+
+            end
+        end
+
+        grid_props.state.matches = nil
+
+        return matched
+    end
+
     -- Run on the grid and check if there is match, clearing the blocks.
     function grid_props.checkMatches()
         local cells = grid_props.cells
         -- Matches contains an array of matched blocks divided into clusters.
         -- Each item has the match amount, the block type and the array of indexes.
         local matches = {}
+        local matchedOnce = false
         local cluster_index = 1
 
         -- Solve col clusters.
@@ -551,36 +653,42 @@ function game_grid.new(gridConfig)
             local col = 0 -- We want the possibility of modifying the loop variable.
             while (col <= grid_props.cols - (grid_props.match_factor - 1)) do
                 local base_cell = cells[col][row]
-                -- We start the clutch with the base_cell.
-                local cluster = {
-                    count = 0,
-                    block = base_cell.props.block,
-                    matched = {}
-                }
 
-                local needle = col
-                -- Check cell from the base one as long the block matches.
-                while (needle < grid_props.cols and cells[needle][row].props.block == base_cell.props.block) do
-                    cluster.count = cluster.count + 1
-                    table.insert(
-                        cluster.matched, {
-                            row = row,
-                            col = needle
-                        }
-                    )
-                    needle = needle + 1
-                end
+                if base_cell.props.block ~= nil then
+                    -- We start the cluster with the base_cell.
+                    local cluster = {
+                        count = 0,
+                        block = base_cell.props.block,
+                        matched = {}
+                    }
 
-                -- There is match for the base_cell in this direction
-                if cluster.count >= 3 then
-                    matches[cluster_index] = cluster
-
-                    for _, matched_cell in pairs(cluster.matched) do
-                        cells[matched_cell.col][matched_cell.row].props.cluster = cluster_index
+                    local needle = col
+                    -- Check cell from the base one as long the block matches.
+                    while (needle < grid_props.cols and cells[needle][row].props.block == base_cell.props.block) do
+                        cluster.count = cluster.count + 1
+                        table.insert(
+                            cluster.matched, {
+                                row = row,
+                                col = needle
+                            }
+                        )
+                        needle = needle + 1
                     end
 
-                    col = col + cluster.count -- We can push the loop to the counter index and avoid unecessary checks.
-                    cluster_index = cluster_index + 1 -- We only increase the cluster index if necessary.
+                    -- There is match for the base_cell in this direction.
+                    if cluster.count >= 3 then
+                        matches[cluster_index] = cluster
+                        matchedOnce = true
+
+                        for _, matched_cell in pairs(cluster.matched) do
+                            cells[matched_cell.col][matched_cell.row].props.cluster = cluster_index
+                        end
+
+                        col = col + cluster.count -- We can push the loop to the counter index and avoid unecessary checks.
+                        cluster_index = cluster_index + 1 -- We only increase the cluster index if necessary.
+                    else
+                        col = col + 1
+                    end
                 else
                     col = col + 1
                 end
@@ -592,106 +700,160 @@ function game_grid.new(gridConfig)
             local row = 0 -- We want the possibility of modifying the loop variable.
             while (row <= grid_props.rows - (grid_props.match_factor - 1)) do
                 local base_cell = cells[col][row]
-                -- We start the clutch with the base_cell.
-                local cluster = {
-                    count = 0,
-                    block = base_cell.props.block,
-                    matched = {}
-                }
 
-                -- We do that to check if cols/rows clusters overlap to form a bigger cluster.
-                local should_merge_clusters = {
-                    overlaped_clusters = {}, -- List of clusters indexes that will be merged.
-                    has_overlaps = false
-                }
+                if base_cell.props.block ~= nil then
+                    -- We start the clutch with the base_cell.
+                    local cluster = {
+                        count = 0,
+                        block = base_cell.props.block,
+                        matched = {}
+                    }
 
-                local needle = row
-                -- Check cell from the base one as long the block matches.
-                while (needle < grid_props.rows and cells[col][needle].props.block == base_cell.props.block) do
-                    local cell_cluster = cells[col][needle].props.cluster
-                    if (cell_cluster) then
-                        should_merge_clusters.has_overlaps = true
-                        should_merge_clusters.overlaped_clusters[cell_cluster] = cell_cluster
+                    -- We do that to check if cols/rows clusters overlap to form a bigger cluster.
+                    local should_merge_clusters = {
+                        overlaped_clusters = {}, -- List of clusters indexes that will be merged.
+                        has_overlaps = false
+                    }
+
+                    local needle = row
+                    -- Check cell from the base one as long the block matches.
+                    while (needle < grid_props.rows and cells[col][needle].props.block == base_cell.props.block) do
+                        local cell_cluster = cells[col][needle].props.cluster
+                        if (cell_cluster) then
+                            should_merge_clusters.has_overlaps = true
+                            should_merge_clusters.overlaped_clusters[cell_cluster] = cell_cluster
+                        end
+
+                        cluster.count = cluster.count + 1
+                        table.insert(
+                            cluster.matched, {
+                                row = needle,
+                                col = col
+                            }
+                        )
+                        needle = needle + 1
                     end
 
-                    cluster.count = cluster.count + 1
-                    table.insert(
-                        cluster.matched, {
-                            row = needle,
-                            col = col
-                        }
-                    )
-                    needle = needle + 1
-                end
+                    -- There is match for the base_cell in this direction
+                    if cluster.count >= 3 then
+                        matches[cluster_index] = cluster
+                        matchedOnce = true
 
-                -- There is match for the base_cell in this direction
-                if cluster.count >= 3 then
-                    matches[cluster_index] = cluster
+                        -- Check if we need to merge clusters
+                        if should_merge_clusters.has_overlaps then
+                            -- Loop on the clusters indexes that should be merged.
+                            for _, overlaped_cluster_index in pairs(should_merge_clusters.overlaped_clusters) do
+                                -- Loop on the overlapped cluster cells, merge to the new cluster.
+                                for _, cell_to_merge in pairs(matches[overlaped_cluster_index].matched) do
+                                    -- We only merge cells that aren't part of the cluster already, avoiding duplicates.
+                                    local unique = true
+                                    for _, cluster_cell in pairs(matches[cluster_index].matched) do
+                                        if (cluster_cell.row == cell_to_merge.row and cluster_cell.col ==
+                                            cell_to_merge.col) then
+                                            unique = false
+                                        end
+                                    end
 
-                    -- Check if we need to merge clusters
-                    if should_merge_clusters.has_overlaps then
-                        -- Loop on the clusters indexes that should be merged.
-                        for _, overlaped_cluster_index in pairs(should_merge_clusters.overlaped_clusters) do
-                            -- Loop on the overlapped cluster cells, merge to the new cluster.
-                            for _, cell_to_merge in pairs(matches[overlaped_cluster_index].matched) do
-                                -- We only merge cells that aren't part of the cluster already, avoiding duplicates.
-                                local unique = true
-                                for _, cluster_cell in pairs(matches[cluster_index].matched) do
-                                    if (cluster_cell.row == cell_to_merge.row and cluster_cell.col == cell_to_merge.col) then
-                                        unique = false
+                                    if unique then
+                                        table.insert(matches[cluster_index].matched, cell_to_merge)
                                     end
                                 end
 
-                                if unique then
-                                    table.insert(matches[cluster_index].matched, cell_to_merge)
-                                end
+                                -- Remove overlaped cluster.
+                                matches[overlaped_cluster_index] = nil
                             end
-
-                            -- Remove overlaped cluster.
-                            matches[overlaped_cluster_index] = nil
                         end
-                    end
 
-                    for _, matched_cell in pairs(matches[cluster_index].matched) do
-                        cells[matched_cell.col][matched_cell.row].props.cluster = cluster_index
-                    end
+                        for _, matched_cell in pairs(matches[cluster_index].matched) do
+                            cells[matched_cell.col][matched_cell.row].props.cluster = cluster_index
+                        end
 
-                    row = row + cluster.count -- We can push the loop to the counter index and avoid unecessary checks.
-                    cluster_index = cluster_index + 1 -- We only increase the cluster index if necessary.
+                        row = row + cluster.count -- We can push the loop to the counter index and avoid unecessary checks.
+                        cluster_index = cluster_index + 1 -- We only increase the cluster index if necessary.
+                    else
+                        row = row + 1
+                    end
                 else
                     row = row + 1
                 end
             end
         end
 
-        -- debug
-        debugger.setMessage("clusters", "Amount of clusters: " .. helpers.count(matches))
+        if matchedOnce then
+            -- We pass the array of clusters to the be cleared.
+            grid_props.state.matches = matches
+            grid_props.state.stage = "matching"
+        else
+            grid_props.state.stage = "idle"
+        end
+    end
 
-        grid_props.forEachCell(
-            function(cell)
-                msg.post(
-                    cell.instance, "set_match", {
-                        matched = false
-                    }
-                )
-            end
+    -- Move the target cell to the target empty space.
+    function grid_props.moveToEmpty(target_cell_to_move, target_empty_cell, animation)
+        -- Move the target block to the available empty space.
+        msg.post(
+            target_empty_cell.instance, "place_block", {
+                block = target_cell_to_move.props.block,
+                from_position = target_cell_to_move.props.pos,
+                animation = animation
+            }
         )
+        target_empty_cell.props.block = target_cell_to_move.props.block
 
-        for _, v in pairs(matches) do
-            for _, cell in pairs(v.matched) do
-                msg.post(
-                    cells[cell.col][cell.row].instance, "set_match", {
-                        matched = true
-                    }
-                )
+        -- Make target cell the new empty cell.
+        msg.post(target_cell_to_move.instance, "disable_block")
+        target_cell_to_move.props.block = nil
+    end
+
+    -- Check for nil blocks in grid.
+    -- Move blocks down and drop new ones.
+    -- By the end, pass to the "recheck" stage to find new matches.
+    function grid_props.refill()
+        local cells = grid_props.cells
+
+        -- Push blocks down.
+        for col = 0, grid_props.cols - 1, 1 do
+            -- Last row do not need checking.
+            local row = 0
+            while row < grid_props.rows - 1 do
+                local reset_row = false
+                local needle_cell = cells[col][row]
+
+                if needle_cell.props.block == nil then
+                    -- Find the next available block to move if any.
+                    local target_cell = nil
+                    local target_needle = row + 1
+                    while target_needle < grid_props.rows do
+                        target_cell = cells[col][target_needle]
+
+                        if target_cell.props.block ~= nil then
+                            break
+                        end
+
+                        target_needle = target_needle + 1
+                    end
+
+                    -- Keep moving blocks if there is a valid movement.
+                    if target_cell.props.block ~= nil then
+                        local animation = {
+                            easing = go.EASING_INEXPO,
+                            time = 0.35
+                        }
+                        grid_props.moveToEmpty(target_cell, needle_cell, animation)
+
+                        reset_row = true
+                    end
+                end
+
+                if (reset_row) then
+                    row = 0 -- Gonna keep reseting until all possible column movements are made.
+                else
+                    row = row + 1
+                end
             end
         end
 
-        grid_props.forEachCell(
-            function(cell)
-                cell.props.cluster = nil
-            end
-        )
+        grid_props.state.stage = "recheck"
     end
 
     return grid_props

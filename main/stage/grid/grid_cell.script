@@ -14,23 +14,25 @@ function init(self)
 end
 
 function update(self, dt)
-    if self.matched then
+    local currentAnimation = go.get("#cell_frame", "animation")
+
+    if self.matched and currentAnimation ~= hashes.cell.animation.basic_match then
         msg.post(
             "#cell_frame", "play_animation", {
                 id = hashes.cell.animation.basic_match
             }
         )
-    else
+    elseif (not self.matched) then
         local non_focused_animation = self.highlighted and hashes.cell.animation.basic_h or hashes.cell.animation.basic
 
-        if self.focused and go.get("#cell_frame", "animation") ~= hashes.cell.animation.basic_2 then
+        if self.focused and currentAnimation ~= hashes.cell.animation.basic_2 then
             -- Change to the focused animation if cell is focused.
             msg.post(
                 "#cell_frame", "play_animation", {
                     id = hashes.cell.animation.basic_2
                 }
             )
-        elseif not self.focused and go.get("#cell_frame", "animation") ~= non_focused_animation then
+        elseif not self.focused and currentAnimation ~= non_focused_animation then
             -- Change to the base animation (neutral or highlighted) if not focused.
             msg.post(
                 "#cell_frame", "play_animation", {
@@ -61,6 +63,14 @@ function on_message(self, message_id, message, sender)
         )
         msg.post(self.block, "enable")
 
+        local animation = {
+            easing = go.EASING_OUTBACK,
+            time = 0.15
+        }
+        if message.animation then
+            animation = message.animation
+        end
+
         if message.from_position then
             -- We want to first reset any ongoing block animations.
             go.cancel_animations(self.block, "position")
@@ -73,8 +83,8 @@ function on_message(self, message_id, message, sender)
             -- Define a new animation for the just placed block.
             self.is_animating = true
             go.animate(
-                self.block, "position", go.PLAYBACK_ONCE_BACKWARD, message.from_position, go.EASING_OUTBACK, 0.15, 0,
-                    function()
+                self.block, "position", go.PLAYBACK_ONCE_BACKWARD, message.from_position, animation.easing,
+                    animation.time, 0, function()
                         GAME_STATE:removeFromPlayerProp(self.player, "is_moving")
                         self.is_animating = false
                     end
@@ -87,6 +97,20 @@ function on_message(self, message_id, message, sender)
     elseif (message_id == hashes.cell.set_highlight) then
         self.highlighted = message.highlight
     elseif (message_id == hashes.cell.set_match) then
+        -- We will start a new animation for every matched block.
+        GAME_STATE:pushToPlayerProp(self.player, "is_matching")
         self.matched = message.matched
+
+        if self.matched then
+            go.animate(
+                self.block, "scale", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(0.5), go.EASING_OUTELASTIC, 0.5, 0,
+                    function()
+                        msg.post(self.block, "disable")
+                        go.set_scale(vmath.vector3(1), self.block)
+                        self.matched = false
+                        GAME_STATE:removeFromPlayerProp(self.player, "is_matching")
+                    end
+            )
+        end
     end
 end

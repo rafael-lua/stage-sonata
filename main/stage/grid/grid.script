@@ -35,53 +35,76 @@ function init(self)
     self.grabbing = false
 end
 
+function update(self, dt)
+    local player = GAME_STATE:getPlayer(self.player)
+    local grid = player.grid
+
+    if (grid.state.stage == "matching") then
+        local matched = grid.clearMatches()
+
+        if matched then
+            grid.state.stage = "refill"
+        else
+            grid.state.stage = "close"
+        end
+    elseif (grid.state.stage == "refill" and #player.is_matching == 0) then
+        grid.refill()
+    elseif (grid.state.stage == "recheck" and #player.is_moving == 0) then
+        grid.checkMatches()
+    elseif grid.state.stage == "close" then
+        grid.applyPraise()
+    end
+end
+
 function on_input(self, action_id, action)
     if self.player ~= hash("") then
-        local grid_world_pos = go.get_world_position()
-
-        -- Set the grab state variables.
-        if action_id == hashes.input.touch then
-            if action.pressed then
-                self.grabbing = true
-            elseif action.released then
-                self.grabbing = false
-            end
-        end
-
         local player = GAME_STATE:getPlayer(self.player)
         local grid = player.grid
 
-        -- Update the axis highlight when block is grabbed.
-        grid.highlightAxis(self.grabbing)
+        if (grid.state.stage == "idle") then
+            local grid_world_pos = go.get_world_position()
 
-        -- Click released anywhere in the screen, we place any selected block on the grid.
-        -- The order matter, since there is a chance of releasing the input during a focus state
-        -- and then a new focus is set on the same frame, causing issues in the placement.
-        if (not self.grabbing and grid.state.selected) then
-            grid.placeSelectedBlock()
-            grid.checkMatches()
-        end
+            -- Set the grab state variables.
+            if action_id == hashes.input.touch then
+                if action.pressed then
+                    self.grabbing = true
+                elseif action.released then
+                    self.grabbing = false
+                end
+            end
 
-        local col_index, row_index, isWithinGrid = grid.getFocusIndex(action, grid_world_pos)
-        grid.updateFocus(col_index, row_index, isWithinGrid)
+            -- Update the axis highlight when block is grabbed.
+            grid.highlightAxis(self.grabbing)
 
-        -- Update selected block position to the cursor.
-        local selectedBlock = grid.state.selected
-        if selectedBlock then
-            go.set_position(vmath.vector3(action.x, action.y, 0), selectedBlock.instance)
-        end
+            -- Click released anywhere in the screen, we place any selected block on the grid.
+            -- The order matter, since there is a chance of releasing the input during a focus state
+            -- and then a new focus is set on the same frame, causing issues in the placement.
+            if (not self.grabbing and grid.state.selected) then
+                grid.placeSelectedBlock()
+                grid.checkMatches()
+            end
 
-        if isWithinGrid then
-            local cellFocus = grid.state.focus
-            local focus_has_block = grid.cells[cellFocus.col][cellFocus.row].props.block
+            local col_index, row_index, isWithinGrid = grid.getFocusIndex(action, grid_world_pos)
+            grid.updateFocus(col_index, row_index, isWithinGrid)
 
-            if (self.grabbing and focus_has_block and (not selectedBlock) and #player.is_moving == 0) then
-                -- If player started to grab, the focus has a block, there is no current selected blocks 
-                -- and also there is no current block movements: We select a new block.
-                grid.selectBlock(action, "#block_selected")
-            elseif (self.grabbing and selectedBlock) then
-                -- Since the player already grabbed a block, we just update movement. 
-                grid.makeSpace()
+            -- Update selected block position to the cursor.
+            local selectedBlock = grid.state.selected
+            if selectedBlock then
+                go.set_position(vmath.vector3(action.x, action.y, 0), selectedBlock.instance)
+            end
+
+            if isWithinGrid then
+                local cellFocus = grid.state.focus
+                local focus_has_block = grid.cells[cellFocus.col][cellFocus.row].props.block
+
+                if (self.grabbing and focus_has_block and (not selectedBlock) and #player.is_moving == 0) then
+                    -- If player started to grab, the focus has a block, there is no current selected blocks 
+                    -- and also there is no current block movements: We select a new block.
+                    grid.selectBlock(action, "#block_selected")
+                elseif (self.grabbing and selectedBlock) then
+                    -- Since the player already grabbed a block, we just update movement. 
+                    grid.makeSpace()
+                end
             end
         end
     end
