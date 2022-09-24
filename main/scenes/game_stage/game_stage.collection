@@ -1,7 +1,7 @@
-name: "main"
-instances {
-  id: "loader"
-  prototype: "/main/loader.go"
+name: "game_stage"
+collection_instances {
+  id: "playfield"
+  collection: "/main/stage/playfield.collection"
   position {
     x: 0.0
     y: 0.0

@@ -1,0 +1,16 @@
+function init(self)
+    msg.post(".", "acquire_input_focus")
+end
+
+function on_input(self, action_id, action)
+    if action_id == hash("touch") and action.pressed then
+        local node = gui.get_node("start_button")
+        if gui.pick_node(node, action.x, action.y) then
+            msg.post(
+                msg.url("main", "/loader", "loader"), "load_scene", {
+                    scene = "game_stage"
+                }
+            )
+        end
+    end
+end

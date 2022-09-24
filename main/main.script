@@ -1,5 +1,9 @@
 math.randomseed(100000 * (socket.gettime() % 1))
-math.random()
 
 function init(self)
+    -- Random warm up.
+    local ri = 1 + math.floor(9 * math.random())
+    for i = 0, ri, 1 do
+        math.random()
+    end
 end
