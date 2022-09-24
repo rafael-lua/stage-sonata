@@ -1,7 +1,6 @@
 local should = require "modules.should"
 local hashes = require "modules.hashes"
 local helpers = require "modules.helpers"
-local debugger = require "modules.debugger"
 local game_grid = {}
 
 -- Possible blocks options per cell.
