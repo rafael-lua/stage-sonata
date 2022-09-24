@@ -201,14 +201,18 @@ function game_grid.new(gridConfig)
     end
 
     -- Gets the world position (pixels) given an col and row index on the grid.
-    function grid_props.getCellWorldPosition(col, row)
+    -- Limit will assert that the cell values are withing the grid.
+    function grid_props.getCellWorldPosition(col, row, limit)
         should.be.all.number({col, row}, "getCellWorldPosition")
-        assert(
-            col <= grid_props.cols and row <= grid_props.rows,
-                "'getCellWorldPosition' col or row parameter were bigger than the grid cells amount:" ..
-                    grid_props.cells_total
-        )
-        assert(col >= 0 and row >= 0, "'getCellWorldPosition' col or row parameter was smaller than 0")
+
+        if limit then
+            assert(
+                col <= grid_props.cols and row <= grid_props.rows,
+                    "'getCellWorldPosition' col or row parameter were bigger than the grid cells amount:" ..
+                        grid_props.cells_total
+            )
+            assert(col >= 0 and row >= 0, "'getCellWorldPosition' col or row parameter was smaller than 0")
+        end
 
         local cellSizeOffset = grid_props.cell_size / 2
 
@@ -235,7 +239,7 @@ function game_grid.new(gridConfig)
 
                 for grid_row = 0, (grid_props.rows - 1), 1 do
                     local props = {
-                        pos = grid_props.getCellWorldPosition(grid_col, grid_row),
+                        pos = grid_props.getCellWorldPosition(grid_col, grid_row, true),
                         index_col = grid_col,
                         index_row = grid_row,
                         size = grid_props.cell_size,
@@ -790,6 +794,11 @@ function game_grid.new(gridConfig)
 
     -- Move the target cell to the target empty space.
     function grid_props.moveToEmpty(target_cell_to_move, target_empty_cell, animation)
+        assert(
+            target_empty_cell.instance ~= nil,
+                "The empty target cell must have a valid block instance. That is, should be a cell inside the grid."
+        )
+
         -- Move the target block to the available empty space.
         msg.post(
             target_empty_cell.instance, "place_block", {
@@ -800,9 +809,12 @@ function game_grid.new(gridConfig)
         )
         target_empty_cell.props.block = target_cell_to_move.props.block
 
-        -- Make target cell the new empty cell.
-        msg.post(target_cell_to_move.instance, "disable_block")
-        target_cell_to_move.props.block = nil
+        -- Make target cell the new empty cell if it haver a valid instance (meaning
+        -- it is a cell inside the grid).
+        if target_cell_to_move.instance then
+            msg.post(target_cell_to_move.instance, "disable_block")
+            target_cell_to_move.props.block = nil
+        end
     end
 
     -- Check for nil blocks in grid.
@@ -813,9 +825,9 @@ function game_grid.new(gridConfig)
 
         -- Push blocks down.
         for col = 0, grid_props.cols - 1, 1 do
-            -- Last row do not need checking.
+            -- Keep moving blocks if there is a valid movement.
             local row = 0
-            while row < grid_props.rows - 1 do
+            while row <= grid_props.rows - 1 do
                 local reset_row = false
                 local needle_cell = cells[col][row]
 
@@ -823,17 +835,31 @@ function game_grid.new(gridConfig)
                     -- Find the next available block to move if any.
                     local target_cell = nil
                     local target_needle = row + 1
-                    while target_needle < grid_props.rows do
-                        target_cell = cells[col][target_needle]
 
-                        if target_cell.props.block ~= nil then
-                            break
+                    -- The target might be after last row, which does not exist.
+                    if target_needle ~= grid_props.rows then
+                        while target_needle < grid_props.rows do
+                            target_cell = cells[col][target_needle]
+
+                            if target_cell.props.block ~= nil then
+                                break
+                            end
+
+                            target_needle = target_needle + 1
                         end
-
-                        target_needle = target_needle + 1
                     end
 
-                    -- Keep moving blocks if there is a valid movement.
+                    -- Here we generate a new block and give him a fake out of bounds position.
+                    if target_cell == nil then
+                        target_cell = {
+                            props = {
+                                pos = grid_props.getCellWorldPosition(col, grid_props.rows, false),
+                                block = grid_props.getRandomBlock()
+                            }
+                        }
+                    end
+
+                    -- Move target block to empty space.
                     if target_cell.props.block ~= nil then
                         local animation = {
                             easing = go.EASING_INEXPO,
