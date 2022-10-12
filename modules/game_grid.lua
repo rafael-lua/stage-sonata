@@ -33,11 +33,11 @@ local defaultGrid = {
     matchless_retries = 1000, -- Try limit for generating matchless grid.
 
     match_config = {
-        base_unit = 50, -- Value per block matched.
+        base_unit = 10, -- Value per block matched.
 
         -- Every successful match (different clusters) in one single movement will add one 
-        -- to the combo multiplier. The combo multiplier is applied last to the final 
-        -- praise combo value. 
+        -- to the total combo multiplier. This is the final multiplier applied to the final
+        -- praise value.
         combo_multiplier = 1,
 
         -- The enemy anxiety is passively added to the final [combo multiplier]. Its the
@@ -47,10 +47,10 @@ local defaultGrid = {
         --[[ 
             If there is multiple different clusters matched together in the same grid,
             we will multiply the [base unit] by the amount of extra clusters. Formula:
-                empoweredBaseUnit = [base unit] * ([clusters amount] * [clusters multiplier])
+                enhancedBaseUnit = [base unit] * ([clusters amount] * [clusters multiplier])
             So if [base unit] is 50 and [clusters multiplier] is 1, and there is 3 clusters, 
             [base unit] will be:
-                empoweredBaseUnit = 50 * (3 * 1) = 150
+                enhancedBaseUnit = 50 * (3 * 1) = 150
         ]]
         clusters_multiplier = 1,
 
@@ -585,13 +585,28 @@ function game_grid.new(gridConfig)
 
     -- Calculates and apply the damage value based on combo.
     -- Ends the turn.
-    function grid_props.applyPraise(total_combo_points)
-        --[[
-            The final praise points calculation will be as follows:
-                praiseBoost = math.floor(math.log10([total combo points]))
-                praisePoints = ([total combo points] / ([match factor] * [base unit]))
-                boostedPraise = praisePoints * praiseBoost
-        ]]
+    function grid_props.applyPraise()
+        local praises = grid_props.state.praises
+        local boostedPraise = 0
+
+        if praises.total > 0 then
+            -- The praise boost is the log 10 of the total points accumalated 
+            -- in the whole matching turn. The more points the player makes, 
+            -- more powerful will be the final added praise.
+
+            local praiseBoost = math.floor(math.log10(praises.total * praises.final_combo_multiplier))
+            local praisePoints = praises.total * praises.final_combo_multiplier
+            boostedPraise = praisePoints * praiseBoost
+        end
+
+        msg.post(
+            "player_gui#player", "set_value", {
+                value = boostedPraise
+            }
+        )
+
+        praises.total = 0
+        praises.final_combo_multiplier = 0
 
         grid_props.state.stage = "idle"
     end
@@ -614,8 +629,12 @@ function game_grid.new(gridConfig)
                 -- TODO: Add the enemy anxiety
                 local enemy_anxiety = 0
                 local extra_combo = match_config.anxiety_multiplier * enemy_anxiety
-                praises.final_combo_multiplier = match_config.combo_multiplier + extra_combo
+                praises.final_combo_multiplier = extra_combo
             end
+
+            -- Enhanced base unit value calculation.
+            local enhanceValue = helpers.count(matches) * match_config.clusters_multiplier
+            local enhancedBaseUnit = match_config.base_unit * enhanceValue
 
             -- Animate and collect.
             for _, cluster in pairs(matches) do
@@ -631,9 +650,14 @@ function game_grid.new(gridConfig)
 
                 --[[ Praise calculation per cluster ]]
 
-                -- Add 1 top combo count per per cluster
-                praises.final_combo_multiplier = praises.final_combo_multiplier + 1
+                -- Add 1 combo count per cluster.
+                praises.final_combo_multiplier = praises.final_combo_multiplier + match_config.combo_multiplier
 
+                local factorValue = 1 + (cluster.count - grid_props.match_factor)
+                local clusterPraiseValue = enhancedBaseUnit * (match_config.factor_multipler * factorValue)
+
+                -- Add the cluster match value to the final praise value.
+                praises.total = praises.total + clusterPraiseValue
             end
         end
 
@@ -787,7 +811,7 @@ function game_grid.new(gridConfig)
             grid_props.state.matches = matches
             grid_props.state.stage = "matching"
         else
-            grid_props.state.stage = "idle"
+            grid_props.state.stage = "close"
         end
     end
 

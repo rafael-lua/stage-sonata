@@ -1,0 +1,10 @@
+function init(self)
+    
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash("set_value") then
+        local combo_node = gui.get_node("combo_score_value")
+        gui.set_text(combo_node, message.value)
+    end
+end
